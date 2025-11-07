@@ -16,26 +16,35 @@ const db = new sqlite3.Database(DBSOURCE, (err) => {
             year INT
         );`, (err) => {
             if (err) {
-                console.error("Error creating table 'movies':", err.message);
+                console.error("Gagal Membuat Tabel 'movies':", err.message);
             } else {
-                const insert = 'INSERT INTO movies (id, title, director, year) VALUES (?,?,?,?)';
+                const insert = 'INSERT or ignore INTO movies (id, title, director, year) VALUES (?,?,?,?)';
                 db.run(insert, [1, "Inception", "Febriyan", 2010]);
                 db.run(insert, [2, "Interstellar", "Putra", 2014]);
+                db.run(insert, [3, "LOTR", "Hariadi", 2012]);
                 console.log("Table 'movies' already exists.");
             }
         }
         )
 
 
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username TEXT NOT NULL UNIQUE,
+                            password TEXT NOT NULL
+                );`, (err) => {
+            if (err) {
+                console.error("Gagal Membuat Tabel 'users':", err.message);
+            }
+        });
         // Tabel directors
-        db.run(`
-            CREATE TABLE directors (
+        db.run(`CREATE TABLE directors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 birthYear INTEGER NOT NULL
             )`, (err) => {
             if (!err) {
-                const insert = 'INSERT INTO directors (name, birthYear) VALUES (?, ?)';
+                const insert = 'INSERT or ignore INTO directors (name, birthYear) VALUES (?, ?)';
                 db.run(insert, ["Christopher Nolan", 1970]);
                 db.run(insert, ["Quentin Tarantino", 1963]);
                 db.run(insert, ["Hayao Miyazaki", 1941]);

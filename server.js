@@ -4,7 +4,15 @@ const cors = require('cors');
 const db = require('./database');
 const app = express();
 const port = process.env.PORT;
+
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET;
+
+const authenticateToken = require('./middleware/authMiddleware');
+
 app.use(cors());
+
 
 // const port = 3100;
 
@@ -44,7 +52,7 @@ app.get('/status', (req, res) => {
 
 );
 
-app.get('/movies', (req, res) => {
+app.get('/movies', authenticateToken, (req, res) => {
     const sql = "SELECT * FROM movies ORDER BY id ASC;";
     db.all(sql, [], (err, rows) => {
         if (err) {
@@ -55,8 +63,35 @@ app.get('/movies', (req, res) => {
 
 });
 
+app.get('/movies/:id', authenticateToken, (req, res) => {
+    const sql = "SELECT * FROM movies WHERE id = ?";
+    db.get(sql, [req.params.id], (err, rows) => {
+        if (err) {
+            return res.status(400).json({ "error": err.message });
+        }
+        res.json(rows);
+    });
+
+});
+
+app.post('/movies', authenticateToken, (req, res) => {
+    const { title, director, year } = req.body;
+    db.run('INSERT INTO movies (title, director, year) VALUES (?, ?, ?)', [title, director, year], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID, title, director, year });
+    });
+});
+
+app.delete('/movies/:id', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM movies WHERE id=?', [id], function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ deletedID: id });
+    });
+});
+
 // ================= DIRECTORS =================
-// Ini adalah bagian kode yang sesuai dengan tugas praktikum[cite: 3].
+
 app.get('/directors', (req, res) => {
     const sql = "SELECT * FROM directors ORDER BY id ASC";
     db.all(sql, [], (err, rows) => {
@@ -73,7 +108,7 @@ app.get('/directors/:id', (req, res) => {
     });
 });
 
-app.post('/directors', (req, res) => {
+app.post('/directors', authenticateToken, (req, res) => {
     const { name, birthYear } = req.body;
     if (!name || !birthYear) {
         return res.status(400).json({ error: "name and birthYear are required" });
@@ -85,7 +120,7 @@ app.post('/directors', (req, res) => {
     });
 });
 
-app.put('/directors/:id', (req, res) => {
+app.put('/directors/:id', authenticateToken, (req, res) => {
     const { name, birthYear } = req.body;
     if (!name || !birthYear) {
         return res.status(400).json({ error: "name and birthYear are required" });
@@ -95,15 +130,85 @@ app.put('/directors/:id', (req, res) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
-        res.json({ updatedID: req.params.id, name, birthYear });
+        res.status(201).json({ updatedID: req.params.id, name, birthYear });
     });
 });
 
-app.delete('/directors/:id', (req, res) => {
+app.delete('/directors/:id', authenticateToken, (req, res) => {
     const sql = "DELETE FROM directors WHERE id = ?";
     db.run(sql, [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ deletedID: req.params.id });
+    });
+});
+
+// === AUTH ROUTES ===
+// profile
+app.get('/profile', authenticateToken, (req, res) => {
+    const sql = "SELECT * FROM users;";
+    db.all(sql, [], (err, rows) => {
+        if (err) {
+            return res.status(400).json({ error: err.message });
+        }
+        res.status(201).json(rows);
+    });
+})
+
+// POST register
+app.post('/auth/register', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password || password.length < 6) {
+        return res.status(400).json({ error: 'username or password (min 6 char) harus diisi' });
+    }
+
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
+        if (err) {
+            console.error("Error hashing:", err);
+            return res.status(500).json({ error: "Gagal memproses pendaftaran" });
+        }
+
+        const sql = "INSERT INTO users (username, password) VALUES (?, ?)";
+        const params = [username.toLowerCase(), hashedPassword];
+        db.run(sql, params, function (err) {
+            if (err) {
+                if (err.message.includes("UNIQUE constraint")) {
+                    return res.status(400).json({ error: "Username sudah digunakan" });
+                }
+                console.error("Error inserting user:", err);
+                return res.status(500).json({ error: "Gagal menyimpan pengguna" });
+            }
+            res.status(201).json({ message: "Registrasi berhasil", userID: this.lastID });
+        });
+    });
+});
+
+// POST login
+app.post('/auth/login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: 'username and password harus diisi' });
+    }
+
+    const sql = "SELECT * FROM users WHERE username = ?";
+    db.get(sql, [username.toLowerCase()], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ error: "Kredensial tidak valid" });
+        }
+
+        bcrypt.compare(password, user.password, (err, isMatch) => {
+            if (err || !isMatch) {
+                return res.status(401).json({ error: "Kredensial Tidak Valid" });
+            }
+            const payload = { user: { id: user.id, username: user.username } };
+
+            jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
+                if (err) {
+                    console.error("Error signing token:", err);
+                    return res.status(500).json({ error: "Gagal membuat token" });
+                }
+                res.json({ message: "Login berhasil", token: token });
+            });
+        });
     });
 });
 

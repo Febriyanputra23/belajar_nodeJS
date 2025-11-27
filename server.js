@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const authenticateToken = require('./middleware/authMiddleware');
+const { authenticateToken, authorizeRole } = require('./middleware/auth.js');
 
 app.use(cors());
 
@@ -82,7 +82,18 @@ app.post('/movies', authenticateToken, (req, res) => {
     });
 });
 
-app.delete('/movies/:id', authenticateToken, (req, res) => {
+app.put('/movies/:id', [authenticateToken, authorizeRole('admin')], (req, res) => {
+    const { title, director, year } = req.body;
+    const sql = "UPDATE movies SET title = ?, director = ?, year = ? WHERE id = ?";
+    db.run(sql, [title, director, year, req.params.id], function (err) {
+        if (err) {
+            return res.status(400).json({ error: err.message });
+        }
+        res.status(201).json({ updatedID: req.params.id, title, director, year });
+    });
+});
+
+app.delete('/movies/:id', [authenticateToken, authorizeRole('admin')], (req, res) => {
     const { id } = req.params;
     db.run('DELETE FROM movies WHERE id=?', [id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -167,8 +178,8 @@ app.post('/auth/register', (req, res) => {
             return res.status(500).json({ error: "Gagal memproses pendaftaran" });
         }
 
-        const sql = "INSERT INTO users (username, password) VALUES (?, ?)";
-        const params = [username.toLowerCase(), hashedPassword];
+        const sql = "INSERT INTO users (username, password, role) VALUES (?, ?, ?)";
+        const params = [username.toLowerCase(), hashedPassword, 'user']; //Tetapkan User
         db.run(sql, params, function (err) {
             if (err) {
                 if (err.message.includes("UNIQUE constraint")) {
@@ -178,6 +189,32 @@ app.post('/auth/register', (req, res) => {
                 return res.status(500).json({ error: "Gagal menyimpan pengguna" });
             }
             res.status(201).json({ message: "Registrasi berhasil", userID: this.lastID });
+        });
+    });
+});
+
+app.post('/auth/register-admin', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password || password.length < 6) {
+        return res.status(400).json({ error: 'Username atau password minimal 6 karakter' });
+    }
+
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
+        if (err) {
+            console.error("Error hashing:", err);
+            return res.status(500).json({ error: "Gagal memproses pendaftaran" });
+        }
+
+        const sql = "INSERT INTO users (username, password, role) VALUES (?, ?, ?)";
+        const params = [username.toLowerCase(), hashedPassword, 'admin']; //Tetapkan Admin
+        db.run(sql, params, function (err) {
+            if (err) {
+                if (err.message.includes("UNIQUE")) {
+                    return res.status(409).json({ error: "Username admin sudah ada" });
+                }
+                return res.status(500).json({ error: err.message });
+            }
+            res.status(201).json({ message: "Registrasi admin berhasil", userID: this.lastID });
         });
     });
 });
@@ -199,7 +236,13 @@ app.post('/auth/login', (req, res) => {
             if (err || !isMatch) {
                 return res.status(401).json({ error: "Kredensial Tidak Valid" });
             }
-            const payload = { user: { id: user.id, username: user.username } };
+            const payload = {
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    role: user.role
+                }
+            };
 
             jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
                 if (err) {

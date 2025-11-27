@@ -13,14 +13,14 @@ function authenticateToken(req, res, next) {
         if (err) {
             return res.status(403).json({ error: 'Token tidak valid, atau kadaluwarsa' });
         }
-        req.user = decodedPayload.user; //Sekarang req.user berisi
-            {id, username, role}
+        req.user = decodedPayload.user; //Sekarang req.user berisi {id, username, role}
+
         next();
     });
 }
 
 //Midleware untuk Autorisasi (Baru)
-function authorizeRole (role) {
+function authorizeRole(role) {
     return (req, res, next) => {
         //Midleware harus dijalankan setelah authenticateToken
         if (req.user && req.user.role === role) {

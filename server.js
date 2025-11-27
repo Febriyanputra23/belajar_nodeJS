@@ -113,7 +113,7 @@ app.delete('/movies/:id', [authenticateToken, authorizeRole('admin')], async (re
 // === RUTE DIRECTORS (Refactored Tugas Praktikum) ===
 
 app.get('/directors', async (req, res, next) => {
-    const sql = `SELECT id, name, "birthYear" FROM directors ORDER BY id ASC`;
+    const sql = "SELECT id, name, birthyear FROM directors ORDER BY id ASC";
     try {
         const result = await db.query(sql);
         res.json(result.rows);
@@ -123,7 +123,7 @@ app.get('/directors', async (req, res, next) => {
 });
 
 app.get('/directors/:id', async (req, res, next) => {
-    const sql = `SELECT id, name, "birthYear" FROM directors WHERE id = $1`;
+    const sql = "SELECT id, name, birthyear FROM directors WHERE id = $1";
     try {
         const result = await db.query(sql, [req.params.id]);
         if (result.rows.length === 0) {
@@ -140,7 +140,7 @@ app.post('/directors', authenticateToken, async (req, res, next) => {
     if (!name) {
         return res.status(400).json({ error: "Name is required" });
     }
-    const sql = `INSERT INTO directors (name, "birthYear") VALUES ($1, $2) RETURNING *`;
+    const sql = "INSERT INTO directors (name, birthyear) VALUES ($1, $2) RETURNING *";
     try {
         const result = await db.query(sql, [name, birthYear || null]);
         res.status(201).json(result.rows[0]);
@@ -154,7 +154,7 @@ app.put('/directors/:id', authenticateToken, async (req, res, next) => {
     if (!name) {
         return res.status(400).json({ error: "Name is required" });
     }
-    const sql = `UPDATE directors SET name = $1, "birthYear" = $2 WHERE id = $3 RETURNING *`;
+    const sql = "UPDATE directors SET name = $1, birthyear = $2 WHERE id = $3 RETURNING *";
     try {
         const result = await db.query(sql, [name, birthYear || null, req.params.id]);
         if (result.rowCount === 0) {

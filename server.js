@@ -43,7 +43,7 @@ app.get('/movies', authenticateToken, async (req, res, next) => {
     } catch (err) {
         next(err);
     }
-});
+}); 
 
 // GET movie by id
 app.get('/movies/:id', authenticateToken, async (req, res, next) => {
